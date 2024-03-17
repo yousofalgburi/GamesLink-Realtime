@@ -75,14 +75,15 @@ wss.on('connection', (ws, request) => {
             if (!rooms[roomId]) {
                 rooms[roomId] = new Set();
             }
-            rooms[roomId].add(ws);
-            // Notify other users in the room that a new user has joined
-            rooms[roomId].forEach((client) => {
-                if (client !== ws && client.readyState === ws_1.WebSocket.OPEN) {
-                    client.send(JSON.stringify({ type: 'userJoined' }));
-                }
-            });
-            ws.send(JSON.stringify({ type: 'userJoined', roomId, userId }));
+            if (!rooms[roomId].has(ws)) {
+                console.log('adding client');
+                rooms[roomId].add(ws);
+                rooms[roomId].forEach((client) => {
+                    if (client.readyState === ws_1.WebSocket.OPEN) {
+                        client.send(JSON.stringify({ type: 'userJoined', roomId, userId }));
+                    }
+                });
+            }
         }
     });
     ws.on('close', (message) => {
@@ -92,6 +93,7 @@ wss.on('connection', (ws, request) => {
         Object.values(rooms).forEach((room) => {
             room.delete(ws);
         });
+        console.log('client disconnected', userId);
         ws.send(JSON.stringify({ type: 'userLeft', userId }));
     });
 });
