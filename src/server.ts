@@ -1,6 +1,6 @@
 import dotenv from 'dotenv'
 import express from 'express'
-import jwt from 'jsonwebtoken'
+import { decode } from 'next-auth/jwt'
 import { WebSocket, WebSocketServer } from 'ws'
 
 dotenv.config()
@@ -26,13 +26,12 @@ function onSocketError(error: Error) {
 	console.error('WebSocket post http error', error)
 }
 
-s.on('upgrade', (request, socket, head) => {
+s.on('upgrade', async (request, socket, head) => {
 	socket.on('error', onSocketPreError)
 
 	// Extract the JWT token from the request headers
 	const cookies = request.headers.cookie
 	if (!cookies) {
-		console.log('rejected')
 		socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
 		socket.destroy()
 		return
@@ -40,12 +39,9 @@ s.on('upgrade', (request, socket, head) => {
 
 	const cookieArray = cookies.split(';')
 
-	console.log(cookieArray)
-
 	// Find the cookie that contains the JWT token
-	const tokenCookie = cookieArray.find((cookie) => cookie.trim().startsWith('__session='))
+	const tokenCookie = cookieArray.find((cookie) => cookie.trim().startsWith('next-auth.session-token'))
 	if (!tokenCookie) {
-		console.log('rejected')
 		socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
 		socket.destroy()
 		return
@@ -53,24 +49,22 @@ s.on('upgrade', (request, socket, head) => {
 
 	const token = tokenCookie.split('=')[1]
 
-	console.log('you shall pass')
+	// Decode the JWT token
+	const decoded = await decode({
+		token: token,
+		secret: jwtSecret
+	})
 
-	console.log(jwtSecret)
-	// Verify the JWT token
-	jwt.verify(token, jwtSecret, { algorithms: ['RS256'] }, (err, decoded) => {
-		if (err) {
-			console.log(err)
-			console.log('jk bad jwt')
-			socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-			socket.destroy()
-			return
-		}
+	if (!decoded) {
+		socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+		socket.destroy()
+		return
+	}
 
-		// Token is valid, proceed with the WebSocket upgrade
-		wss.handleUpgrade(request, socket, head, (ws) => {
-			socket.removeListener('error', onSocketPreError)
-			wss.emit('connection', ws, request)
-		})
+	// Token is valid, proceed with the WebSocket upgrade
+	wss.handleUpgrade(request, socket, head, (ws) => {
+		socket.removeListener('error', onSocketPreError)
+		wss.emit('connection', ws, request)
 	})
 })
 
