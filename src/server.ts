@@ -73,7 +73,7 @@ wss.on('connection', (ws, request) => {
 
 	ws.on('message', (message) => {
 		const data = JSON.parse(message.toString())
-		const { type, roomId } = data
+		const { type, roomId, userId } = data
 
 		if (type === 'join') {
 			if (!rooms[roomId]) {
@@ -87,16 +87,20 @@ wss.on('connection', (ws, request) => {
 					client.send(JSON.stringify({ type: 'userJoined' }))
 				}
 			})
-		}
 
-		// Handle other message types as needed
+			ws.send(JSON.stringify({ type: 'userJoined', roomId, userId }))
+		}
 	})
 
-	ws.on('close', () => {
+	ws.on('close', (message) => {
+		const data = JSON.parse(message.toString())
+		const { userId } = data
+
 		// Remove the WebSocket connection from the room when it's closed
 		Object.values(rooms).forEach((room) => {
 			room.delete(ws)
 		})
-		console.log('WebSocket was closed')
+
+		ws.send(JSON.stringify({ type: 'userLeft', userId }))
 	})
 })
