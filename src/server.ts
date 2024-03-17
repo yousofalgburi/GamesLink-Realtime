@@ -10,6 +10,7 @@ const app = express()
 
 const wss = new WebSocketServer({ noServer: true })
 const rooms: Record<string, Set<WebSocket>> = {}
+const connectedClients: Map<WebSocket, string> = new Map()
 
 const s = app.listen(port, () => {
 	console.log(`Server is running on port ${port}`)
@@ -83,6 +84,7 @@ wss.on('connection', (ws, request) => {
 			if (!rooms[roomId].has(ws)) {
 				console.log('adding client')
 				rooms[roomId].add(ws)
+				connectedClients.set(ws, userId) // Store the userId associated with the WebSocket connection
 
 				rooms[roomId].forEach((client) => {
 					if (client.readyState === WebSocket.OPEN) {
@@ -94,15 +96,26 @@ wss.on('connection', (ws, request) => {
 	})
 
 	ws.on('close', (message) => {
-		const data = JSON.parse(message.toString())
-		const { userId } = data
+		const userId = connectedClients.get(ws) // Get the userId associated with the closed WebSocket connection
 
-		// Remove the WebSocket connection from the room when it's closed
-		Object.values(rooms).forEach((room) => {
-			room.delete(ws)
-		})
+		if (userId) {
+			// Remove the WebSocket connection from the room when it's closed
+			Object.values(rooms).forEach((room) => {
+				room.delete(ws)
+			})
 
-		console.log('client disconnected', userId)
-		ws.send(JSON.stringify({ type: 'userLeft', userId }))
+			console.log('client disconnected', userId)
+
+			// Notify other clients in the room that the user has left
+			Object.values(rooms).forEach((room) => {
+				room.forEach((client) => {
+					if (client.readyState === WebSocket.OPEN) {
+						client.send(JSON.stringify({ type: 'userLeft', userId }))
+					}
+				})
+			})
+
+			connectedClients.delete(ws)
+		}
 	})
 })
