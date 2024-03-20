@@ -82,12 +82,12 @@ wss.on('connection', (ws, request) => {
 			}
 
 			if (!rooms[roomId].has(ws)) {
-				console.log('adding client')
 				rooms[roomId].add(ws)
 				connectedClients.set(ws, userId) // Store the userId associated with the WebSocket connection
 
 				rooms[roomId].forEach((client) => {
 					if (client.readyState === WebSocket.OPEN) {
+						console.log('sending back client request ')
 						client.send(JSON.stringify({ type: 'userJoined', roomId, userId }))
 					}
 				})
