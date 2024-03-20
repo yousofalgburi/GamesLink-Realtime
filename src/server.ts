@@ -1,3 +1,4 @@
+import axios from 'axios'
 import dotenv from 'dotenv'
 import express from 'express'
 import { decode } from 'next-auth/jwt'
@@ -10,7 +11,7 @@ const app = express()
 
 const wss = new WebSocketServer({ noServer: true })
 const rooms: Record<string, Set<WebSocket>> = {}
-const connectedClients: Map<WebSocket, string> = new Map()
+const connectedClients: Map<WebSocket, { userId: string; roomId: string }> = new Map()
 
 const s = app.listen(port, () => {
 	console.log(`Server is running on port ${port}`)
@@ -83,11 +84,10 @@ wss.on('connection', (ws, request) => {
 
 			if (!rooms[roomId].has(ws)) {
 				rooms[roomId].add(ws)
-				connectedClients.set(ws, userId) // Store the userId associated with the WebSocket connection
+				connectedClients.set(ws, { userId, roomId }) // Store the userId associated with the WebSocket connection
 
 				rooms[roomId].forEach((client) => {
 					if (client.readyState === WebSocket.OPEN) {
-						console.log('sending back client request ')
 						client.send(JSON.stringify({ type: 'userJoined', roomId, userId }))
 					}
 				})
@@ -95,25 +95,33 @@ wss.on('connection', (ws, request) => {
 		}
 	})
 
-	ws.on('close', (message) => {
-		const userId = connectedClients.get(ws) // Get the userId associated with the closed WebSocket connection
+	ws.on('close', async (message) => {
+		const user = connectedClients.get(ws) // Get the userId associated with the closed WebSocket connection
 
-		if (userId) {
+		if (!user) return
+
+		if (user.userId) {
 			// Remove the WebSocket connection from the room when it's closed
 			Object.values(rooms).forEach((room) => {
 				room.delete(ws)
 			})
 
-			console.log('client disconnected', userId)
+			console.log('client disconnected', user.userId)
 
 			// Notify other clients in the room that the user has left
 			Object.values(rooms).forEach((room) => {
 				room.forEach((client) => {
 					if (client.readyState === WebSocket.OPEN) {
-						client.send(JSON.stringify({ type: 'userLeft', userId }))
+						client.send(JSON.stringify({ type: 'userLeft', userId: user.userId }))
 					}
 				})
 			})
+
+			console.log('before leave room')
+
+			if (rooms[user.roomId].size === 0) {
+				await axios.patch(`http://localhost:3000/api/linkroom/remove?roomId=${user.roomId}`)
+			}
 
 			connectedClients.delete(ws)
 		}

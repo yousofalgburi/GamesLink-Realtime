@@ -12,6 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const axios_1 = __importDefault(require("axios"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const express_1 = __importDefault(require("express"));
 const jwt_1 = require("next-auth/jwt");
@@ -78,33 +79,38 @@ wss.on('connection', (ws, request) => {
             }
             if (!rooms[roomId].has(ws)) {
                 rooms[roomId].add(ws);
-                connectedClients.set(ws, userId); // Store the userId associated with the WebSocket connection
+                connectedClients.set(ws, { userId, roomId }); // Store the userId associated with the WebSocket connection
                 rooms[roomId].forEach((client) => {
                     if (client.readyState === ws_1.WebSocket.OPEN) {
-                        console.log('sending back client request ');
                         client.send(JSON.stringify({ type: 'userJoined', roomId, userId }));
                     }
                 });
             }
         }
     });
-    ws.on('close', (message) => {
-        const userId = connectedClients.get(ws); // Get the userId associated with the closed WebSocket connection
-        if (userId) {
+    ws.on('close', (message) => __awaiter(void 0, void 0, void 0, function* () {
+        const user = connectedClients.get(ws); // Get the userId associated with the closed WebSocket connection
+        if (!user)
+            return;
+        if (user.userId) {
             // Remove the WebSocket connection from the room when it's closed
             Object.values(rooms).forEach((room) => {
                 room.delete(ws);
             });
-            console.log('client disconnected', userId);
+            console.log('client disconnected', user.userId);
             // Notify other clients in the room that the user has left
             Object.values(rooms).forEach((room) => {
                 room.forEach((client) => {
                     if (client.readyState === ws_1.WebSocket.OPEN) {
-                        client.send(JSON.stringify({ type: 'userLeft', userId }));
+                        client.send(JSON.stringify({ type: 'userLeft', userId: user.userId }));
                     }
                 });
             });
+            console.log('before leave room');
+            if (rooms[user.roomId].size === 0) {
+                yield axios_1.default.patch(`http://localhost:3000/api/linkroom/remove?roomId=${user.roomId}`);
+            }
             connectedClients.delete(ws);
         }
-    });
+    }));
 });
