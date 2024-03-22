@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getRoomSize = exports.notifyClients = exports.leaveRoom = exports.joinRoom = void 0;
+exports.getRoomSize = exports.notifyClients = exports.leaveRoom = exports.joinRoomQueue = exports.joinRoom = void 0;
 const ws_1 = require("ws");
 const rooms = {};
 const joinRoom = (roomId, ws, userId) => {
@@ -13,6 +13,15 @@ const joinRoom = (roomId, ws, userId) => {
     }
 };
 exports.joinRoom = joinRoom;
+const joinRoomQueue = (roomId, ws, userId) => {
+    if (!rooms[roomId]) {
+        return;
+    }
+    if (!rooms[roomId].has(ws)) {
+        (0, exports.notifyClients)(roomId, 'userJoinedQueue', { roomId, userId: userId });
+    }
+};
+exports.joinRoomQueue = joinRoomQueue;
 const leaveRoom = (roomId, ws, userId) => {
     if (rooms[roomId]) {
         rooms[roomId].delete(ws);

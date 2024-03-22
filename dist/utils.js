@@ -67,6 +67,9 @@ const onSocketMessage = (ws) => (message) => {
         (0, clientManager_1.addClient)(ws, userId, roomId);
         (0, roomManager_1.joinRoom)(roomId, ws, userId);
     }
+    if (type === 'joinQueue') {
+        (0, roomManager_1.joinRoomQueue)(roomId, ws, userId);
+    }
 };
 exports.onSocketMessage = onSocketMessage;
 const onSocketClose = (ws) => () => __awaiter(void 0, void 0, void 0, function* () {

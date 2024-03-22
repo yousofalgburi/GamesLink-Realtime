@@ -3,7 +3,7 @@ import { Data, Server, WebSocket } from 'ws'
 import { decode } from 'next-auth/jwt'
 import { jwtSecret } from './config'
 import { addClient, getClient, removeClient } from './clientManager'
-import { joinRoom, leaveRoom, getRoomSize } from './roomManager'
+import { joinRoom, leaveRoom, getRoomSize, joinRoomQueue } from './roomManager'
 import axios from 'axios'
 import internal from 'stream'
 
@@ -65,6 +65,10 @@ export const onSocketMessage = (ws: WebSocket) => (message: Data) => {
 	if (type === 'join') {
 		addClient(ws, userId, roomId)
 		joinRoom(roomId, ws, userId)
+	}
+
+	if (type === 'joinQueue') {
+		joinRoomQueue(roomId, ws, userId)
 	}
 }
 

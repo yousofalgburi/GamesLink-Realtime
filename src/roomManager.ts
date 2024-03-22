@@ -12,6 +12,16 @@ export const joinRoom = (roomId: string, ws: WebSocket, userId: string) => {
 	}
 }
 
+export const joinRoomQueue = (roomId: string, ws: WebSocket, userId: string) => {
+	if (!rooms[roomId]) {
+		return
+	}
+
+	if (!rooms[roomId].has(ws)) {
+		notifyClients(roomId, 'userJoinedQueue', { roomId, userId: userId })
+	}
+}
+
 export const leaveRoom = (roomId: string, ws: WebSocket, userId: string) => {
 	if (rooms[roomId]) {
 		rooms[roomId].delete(ws)
