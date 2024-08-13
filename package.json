@@ -7,7 +7,7 @@
 		"dev:build": "tsc -w",
 		"dev:start": "nodemon dist/server.js",
 		"dev": "concurrently \"pnpm run dev:build\" \"pnpm run dev:start\"",
-		"build": "if exist dist rmdir /s /q dist && prettier --write src/ && tsc"
+		"build": "if exist dist rmdir /s /q dist && tsc"
 	},
 	"keywords": [],
 	"author": "",
