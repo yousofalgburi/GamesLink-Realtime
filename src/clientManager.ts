@@ -1,4 +1,4 @@
-import { WebSocket } from 'ws'
+import type { WebSocket } from 'ws'
 
 const connectedClients: Map<WebSocket, { userId: string; roomId: string }> = new Map()
 

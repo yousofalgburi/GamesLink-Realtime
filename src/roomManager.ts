@@ -29,13 +29,13 @@ export const leaveRoom = (roomId: string, ws: WebSocket, userId: string) => {
 	}
 }
 
-export const notifyClients = (roomId: string, type: string, data: any) => {
+export const notifyClients = (roomId: string, type: string, data: Record<string, unknown>) => {
 	if (rooms[roomId]) {
-		rooms[roomId].forEach((client) => {
+		for (const client of rooms[roomId]) {
 			if (client.readyState === WebSocket.OPEN) {
 				client.send(JSON.stringify({ type, ...data }))
 			}
-		})
+		}
 	}
 }
 
