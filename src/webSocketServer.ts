@@ -2,8 +2,17 @@ import { WebSocketServer } from 'ws'
 import express from 'express'
 import { port } from './config'
 import { handleUpgrade } from './utils'
+import cors from 'cors'
 
 const app = express()
+
+app.use(
+	cors({
+		origin: 'http://localhost:3000',
+		credentials: true,
+	}),
+)
+
 const wss = new WebSocketServer({ noServer: true })
 
 export const startServer = () => {

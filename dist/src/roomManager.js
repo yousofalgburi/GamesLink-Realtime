@@ -1,0 +1,37 @@
+import { WebSocket } from 'ws';
+const rooms = {};
+export const joinRoom = (roomId, ws, userId) => {
+    if (!rooms[roomId]) {
+        rooms[roomId] = new Set();
+    }
+    if (!rooms[roomId].has(ws)) {
+        rooms[roomId].add(ws);
+        notifyClients(roomId, 'userJoined', { roomId, userId: userId });
+    }
+};
+export const joinRoomQueue = (roomId, ws, userId) => {
+    if (!rooms[roomId]) {
+        return;
+    }
+    if (!rooms[roomId].has(ws)) {
+        notifyClients(roomId, 'userJoinedQueue', { roomId, userId: userId });
+    }
+};
+export const leaveRoom = (roomId, ws, userId) => {
+    if (rooms[roomId]) {
+        rooms[roomId].delete(ws);
+        notifyClients(roomId, 'userLeft', { userId: userId });
+    }
+};
+export const notifyClients = (roomId, type, data) => {
+    if (rooms[roomId]) {
+        for (const client of rooms[roomId]) {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ type, ...data }));
+            }
+        }
+    }
+};
+export const getRoomSize = (roomId) => {
+    return rooms[roomId] ? rooms[roomId].size : 0;
+};
