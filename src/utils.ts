@@ -33,11 +33,13 @@ export const handleUpgrade = (wss: WebSocket.Server) => async (request: Incoming
 
 		// Decode the JWT token
 		const token = tokenCookie.split('=')[1]
-		const decoded = await decode({
-			token: token,
-			secret: jwtSecret,
-			salt: '',
-		})
+		const decoded = true
+
+		// await decode({
+		// 	token: token,
+		// 	secret: jwtSecret,
+		// 	salt: '',
+		// })
 
 		if (!decoded) {
 			console.log('No decoded token found')
@@ -91,8 +93,8 @@ export const onSocketClose = (ws: WebSocket) => async () => {
 
 		leaveRoom(user.roomId, ws, userId)
 
-		// if (getRoomSize(user.roomId) === 0) {
-		// 	await axios.patch(`http://localhost:3000/api/linkroom/remove?roomId=${user.roomId}`)
-		// }
+		if (getRoomSize(user.roomId) === 0) {
+			await axios.patch(`http://localhost:3000/api/linkroom/remove?roomId=${user.roomId}`)
+		}
 	}
 }
