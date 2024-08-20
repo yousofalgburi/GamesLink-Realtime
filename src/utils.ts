@@ -11,28 +11,28 @@ export const handleUpgrade = (wss: WebSocket.Server) => async (request: Incoming
 	try {
 		socket.on('error', onSocketPreError)
 
-		// Extract the JWT token from the request headers
-		const cookies = request.headers.cookie
-		if (!cookies) {
-			console.log('No cookies found')
-			socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-			socket.destroy()
-			return
-		}
+		// // Extract the JWT token from the request headers
+		// const cookies = request.headers.cookie
+		// if (!cookies) {
+		// 	console.log('No cookies found')
+		// 	socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+		// 	socket.destroy()
+		// 	return
+		// }
 
-		const cookieArray = cookies.split(';')
+		// const cookieArray = cookies.split(';')
 
-		// Find the cookie that contains the JWT token
-		const tokenCookie = cookieArray.find((cookie) => cookie.trim().startsWith('authjs.session-token'))
-		if (!tokenCookie) {
-			console.log('No token cookie found')
-			socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
-			socket.destroy()
-			return
-		}
+		// // Find the cookie that contains the JWT token
+		// const tokenCookie = cookieArray.find((cookie) => cookie.trim().startsWith('authjs.session-token'))
+		// if (!tokenCookie) {
+		// 	console.log('No token cookie found')
+		// 	socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+		// 	socket.destroy()
+		// 	return
+		// }
 
 		// Decode the JWT token
-		const token = tokenCookie.split('=')[1]
+		// const token = tokenCookie.split('=')[1]
 		const decoded = true
 
 		// await decode({
