@@ -11,6 +11,10 @@ app.use(
 		origin: 'http://localhost:3000',
 		credentials: true,
 	}),
+	cors({
+		origin: 'https://gameslink.app',
+		credentials: true,
+	}),
 )
 
 const wss = new WebSocketServer({ noServer: true })
