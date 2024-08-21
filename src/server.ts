@@ -172,10 +172,6 @@ const onSocketClose = (ws: WebSocket) => async () => {
 		}
 
 		leaveRoom(user.roomId, ws, userId)
-
-		if (getRoomSize(user.roomId) === 0) {
-			await axios.patch(`http://localhost:3000/api/linkroom/remove?roomId=${user.roomId}`)
-		}
 	}
 }
 
