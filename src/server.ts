@@ -73,6 +73,23 @@ const leaveRoom = (roomId: string, ws: WebSocket, userId: string) => {
 	}
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+const broadcastRollResults = (roomId: string, rollResults: any) => {
+	if (rooms[roomId]) {
+		for (const client of rooms[roomId]) {
+			if (client.readyState === WebSocket.OPEN) {
+				client.send(
+					JSON.stringify({
+						type: 'newRoll',
+						roomId,
+						rollResults,
+					}),
+				)
+			}
+		}
+	}
+}
+
 const notifyClients = (roomId: string, type: string, data: Record<string, unknown>) => {
 	if (rooms[roomId]) {
 		for (const client of rooms[roomId]) {
@@ -121,7 +138,7 @@ const onSocketError = (error: Error) => {
 	console.error('WebSocket post http error', error)
 }
 
-const onSocketMessage = (ws: WebSocket) => (message: Data) => {
+const onSocketMessage = (ws: WebSocket) => async (message: Data) => {
 	const data = JSON.parse(message.toString())
 	const { type, roomId, userId } = data
 
@@ -132,6 +149,16 @@ const onSocketMessage = (ws: WebSocket) => (message: Data) => {
 
 	if (type === 'joinQueue') {
 		joinRoomQueue(roomId, ws, userId)
+	}
+
+	if (type === 'requestRoll') {
+		try {
+			const response = await axios.post('http://localhost:3000/api/linkroom/roll', { roomId, previousRolls: data.previousRolls })
+			broadcastRollResults(roomId, response.data)
+		} catch (error) {
+			console.error('Error processing roll request:', error)
+			ws.send(JSON.stringify({ type: 'rollError', error: 'Failed to process roll request' }))
+		}
 	}
 }
 
