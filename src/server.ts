@@ -28,20 +28,22 @@ const server = http.createServer(app)
 const wss = new WebSocketServer({ noServer: true })
 
 // Client management
-const connectedClients: Map<WebSocket, { userId: string; roomId: string }> = new Map()
+const connectedClients: Map<string, { ws: WebSocket; roomId: string }> = new Map()
 
 const addClient = (ws: WebSocket, userId: string, roomId: string) => {
-	connectedClients.set(ws, { userId, roomId })
+	const existingClient = connectedClients.get(userId)
+	if (existingClient) {
+		existingClient.ws.close()
+	}
+	connectedClients.set(userId, { ws, roomId })
 }
 
-const removeClient = (ws: WebSocket) => {
-	const user = connectedClients.get(ws)
-	connectedClients.delete(ws)
-	return user?.userId
+const removeClient = (userId: string) => {
+	connectedClients.delete(userId)
 }
 
-const getClient = (ws: WebSocket) => {
-	return connectedClients.get(ws)
+const getClient = (userId: string) => {
+	return connectedClients.get(userId)
 }
 
 // Room management
@@ -74,10 +76,10 @@ const leaveRoom = (roomId: string, ws: WebSocket, userId: string) => {
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-const broadcastRollResults = (roomId: string, rollResults: any) => {
+const broadcastRollResults = (roomId: string, rollResults: any, excludeWs?: WebSocket) => {
 	if (rooms[roomId]) {
 		for (const client of rooms[roomId]) {
-			if (client.readyState === WebSocket.OPEN) {
+			if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
 				client.send(
 					JSON.stringify({
 						type: 'newRoll',
@@ -90,18 +92,14 @@ const broadcastRollResults = (roomId: string, rollResults: any) => {
 	}
 }
 
-const notifyClients = (roomId: string, type: string, data: Record<string, unknown>) => {
+const notifyClients = (roomId: string, type: string, data: Record<string, unknown>, excludeWs?: WebSocket) => {
 	if (rooms[roomId]) {
 		for (const client of rooms[roomId]) {
-			if (client.readyState === WebSocket.OPEN) {
+			if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
 				client.send(JSON.stringify({ type, ...data }))
 			}
 		}
 	}
-}
-
-const getRoomSize = (roomId: string) => {
-	return rooms[roomId] ? rooms[roomId].size : 0
 }
 
 // WebSocket handlers
@@ -142,19 +140,23 @@ const onSocketMessage = (ws: WebSocket) => async (message: Data) => {
 	const data = JSON.parse(message.toString())
 	const { type, roomId, userId } = data
 
+	console.log(`Received message type: ${type} from user: ${userId} in room: ${roomId}`)
+
 	if (type === 'join') {
 		addClient(ws, userId, roomId)
 		joinRoom(roomId, ws, userId)
-	}
-
-	if (type === 'joinQueue') {
+		notifyClients(roomId, 'userJoined', { roomId, userId }, ws)
+	} else if (type === 'joinQueue') {
 		joinRoomQueue(roomId, ws, userId)
-	}
-
-	if (type === 'requestRoll') {
+		notifyClients(roomId, 'userJoinedQueue', { roomId, userId }, ws)
+	} else if (type === 'requestRoll') {
 		try {
-			const response = await axios.post('http://localhost:3000/api/linkroom/roll', { roomId, previousRolls: data.previousRolls })
-			broadcastRollResults(roomId, response.data)
+			const response = await axios.post('http://localhost:3000/api/linkroom/roll', {
+				roomId,
+				previousRolls: data.previousRolls,
+				saveRoll: false,
+			})
+			broadcastRollResults(roomId, response.data, ws)
 		} catch (error) {
 			console.error('Error processing roll request:', error)
 			ws.send(JSON.stringify({ type: 'rollError', error: 'Failed to process roll request' }))
@@ -163,15 +165,12 @@ const onSocketMessage = (ws: WebSocket) => async (message: Data) => {
 }
 
 const onSocketClose = (ws: WebSocket) => async () => {
-	const user = getClient(ws)
-	if (user) {
-		const userId = removeClient(ws)
-
-		if (!userId) {
-			return
+	for (const [userId, client] of connectedClients.entries()) {
+		if (client.ws === ws) {
+			removeClient(userId)
+			leaveRoom(client.roomId, ws, userId)
+			break
 		}
-
-		leaveRoom(user.roomId, ws, userId)
 	}
 }
 
@@ -188,7 +187,10 @@ wss.on('connection', (ws) => {
 	console.log('New WebSocket connection established')
 	ws.on('error', onSocketError)
 	ws.on('message', onSocketMessage(ws))
-	ws.on('close', onSocketClose(ws))
+	ws.on('close', (code, reason) => {
+		console.log(`WebSocket closed: ${code} ${reason}`)
+		onSocketClose(ws)()
+	})
 })
 
 console.log('WebSocket server started successfully')
