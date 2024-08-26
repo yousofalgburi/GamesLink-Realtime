@@ -29,6 +29,7 @@ const wss = new WebSocketServer({ noServer: true })
 
 // Client management
 const connectedClients: Map<string, { ws: WebSocket; roomId: string }> = new Map()
+const rooms: Map<string, Set<string>> = new Map()
 
 const addClient = (ws: WebSocket, userId: string, roomId: string) => {
 	const existingClient = connectedClients.get(userId)
@@ -39,64 +40,63 @@ const addClient = (ws: WebSocket, userId: string, roomId: string) => {
 }
 
 const removeClient = (userId: string) => {
-	connectedClients.delete(userId)
-}
-
-const getClient = (userId: string) => {
-	return connectedClients.get(userId)
-}
-
-// Room management
-const rooms: Record<string, Set<WebSocket>> = {}
-
-const joinRoom = (roomId: string, ws: WebSocket, userId: string) => {
-	if (!rooms[roomId]) {
-		rooms[roomId] = new Set()
-	}
-	if (!rooms[roomId].has(ws)) {
-		rooms[roomId].add(ws)
-		notifyClients(roomId, 'userJoined', { roomId, userId: userId })
+	const client = connectedClients.get(userId)
+	if (client) {
+		leaveRoom(client.roomId, userId)
+		connectedClients.delete(userId)
 	}
 }
 
-const joinRoomQueue = (roomId: string, ws: WebSocket, userId: string) => {
-	if (!rooms[roomId]) {
+const joinRoom = (roomId: string, userId: string) => {
+	if (!rooms.has(roomId)) {
+		rooms.set(roomId, new Set())
+	}
+	const room = rooms.get(roomId)
+
+	if (!room) {
 		return
 	}
-	if (!rooms[roomId].has(ws)) {
-		notifyClients(roomId, 'userJoinedQueue', { roomId, userId: userId })
+
+	if (!room.has(userId)) {
+		room.add(userId)
+		notifyClients(roomId, 'userJoined', { roomId, userId }, userId)
 	}
 }
 
-const leaveRoom = (roomId: string, ws: WebSocket, userId: string) => {
-	if (rooms[roomId]) {
-		rooms[roomId].delete(ws)
-		notifyClients(roomId, 'userLeft', { userId: userId })
-	}
-}
-
-// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-const broadcastRollResults = (roomId: string, rollResults: any, excludeWs?: WebSocket) => {
-	if (rooms[roomId]) {
-		for (const client of rooms[roomId]) {
-			if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
-				client.send(
-					JSON.stringify({
-						type: 'newRoll',
-						roomId,
-						rollResults,
-					}),
-				)
-			}
+const leaveRoom = (roomId: string, userId: string) => {
+	const room = rooms.get(roomId)
+	if (room) {
+		room.delete(userId)
+		notifyClients(roomId, 'userLeft', { roomId, userId }, userId)
+		if (room.size === 0) {
+			rooms.delete(roomId)
 		}
 	}
 }
 
-const notifyClients = (roomId: string, type: string, data: Record<string, unknown>, excludeWs?: WebSocket) => {
-	if (rooms[roomId]) {
-		for (const client of rooms[roomId]) {
-			if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
-				client.send(JSON.stringify({ type, ...data }))
+// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+const joinRoomQueue = async (roomId: string, ws: WebSocket, user: any) => {
+	if (!rooms.has(roomId)) {
+		return
+	}
+
+	try {
+		notifyClients(roomId, 'userJoinedQueue', { roomId, user }, user.id)
+	} catch (error) {
+		console.error('Error joining room queue:', error)
+	}
+}
+
+const notifyClients = (roomId: string, type: string, data: Record<string, unknown>, excludeUserId?: string) => {
+	const room = rooms.get(roomId)
+	if (room) {
+		const message = JSON.stringify({ type, ...data })
+		for (const userId of room) {
+			if (userId !== excludeUserId) {
+				const client = connectedClients.get(userId)
+				if (client && client.ws.readyState === WebSocket.OPEN) {
+					client.ws.send(message)
+				}
 			}
 		}
 	}
@@ -138,29 +138,19 @@ const onSocketError = (error: Error) => {
 
 const onSocketMessage = (ws: WebSocket) => async (message: Data) => {
 	const data = JSON.parse(message.toString())
-	const { type, roomId, userId } = data
-
-	console.log(`Received message type: ${type} from user: ${userId} in room: ${roomId}`)
+	const { type, roomId, userId, user } = data
 
 	if (type === 'join') {
 		addClient(ws, userId, roomId)
-		joinRoom(roomId, ws, userId)
-		notifyClients(roomId, 'userJoined', { roomId, userId }, ws)
-	} else if (type === 'joinQueue') {
-		joinRoomQueue(roomId, ws, userId)
-		notifyClients(roomId, 'userJoinedQueue', { roomId, userId }, ws)
+		joinRoom(roomId, userId)
+		notifyClients(roomId, 'userJoined', { userId }, userId)
+	} else if (type === 'leave') {
+		removeClient(userId)
+		notifyClients(roomId, 'userLeft', { userId }, userId)
 	} else if (type === 'requestRoll') {
-		try {
-			const response = await axios.post('http://localhost:3000/api/linkroom/roll', {
-				roomId,
-				previousRolls: data.previousRolls,
-				saveRoll: false,
-			})
-			broadcastRollResults(roomId, response.data, ws)
-		} catch (error) {
-			console.error('Error processing roll request:', error)
-			ws.send(JSON.stringify({ type: 'rollError', error: 'Failed to process roll request' }))
-		}
+		notifyClients(roomId, 'newRollAvailable', { rollerId: userId }, userId)
+	} else if (type === 'joinQueue') {
+		joinRoomQueue(roomId, ws, user)
 	}
 }
 
@@ -168,7 +158,6 @@ const onSocketClose = (ws: WebSocket) => async () => {
 	for (const [userId, client] of connectedClients.entries()) {
 		if (client.ws === ws) {
 			removeClient(userId)
-			leaveRoom(client.roomId, ws, userId)
 			break
 		}
 	}
